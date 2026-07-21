@@ -6,13 +6,25 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #fff; }
     .event-list { width: 100%; border-collapse: collapse; font-size: 13px; }
+    
+    /* Månadsrubrik */
+    .month-header { background-color: #333; color: #fff; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    .month-header td { padding: 8px 10px; }
+
+    /* Händelserader */
     .event-row { border-bottom: 1px solid #e0e0e0; }
-    .date-cell { padding: 12px 8px; width: 110px; vertical-align: top; background-color: #f9f9f9; color: #333; line-height: 1.3; }
-    .info-cell { padding: 12px 8px; vertical-align: top; line-height: 1.4; }
+    
+    /* Datumkolumnen */
+    .date-cell { padding: 12px 8px; width: 80px; vertical-align: top; background-color: #f9f9f9; text-align: center; border-right: 2px solid #ddd; }
+    .day-number { font-size: 18px; font-weight: bold; color: #111; line-height: 1; }
+    .day-name { font-size: 11px; color: #666; text-transform: uppercase; margin-top: 4px; font-weight: bold; }
+    
+    /* Informationskolumnen */
+    .info-cell { padding: 12px 12px; vertical-align: top; line-height: 1.4; }
     .title { font-size: 15px; color: #111; font-weight: bold; margin-bottom: 3px; display: inline-block; }
+    .details { color: #444; font-size: 12px; margin-top: 2px; }
     .hall { color: #d32f2f; font-weight: bold; }
-    .impact { background-color: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; display: inline-block; margin-top: 4px; }
-    .note { font-size: 12px; color: #555; margin-top: 4px; }
+    .impact { background-color: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; display: inline-block; margin-top: 5px; }
   </style>
 </head>
 <body>
@@ -30,28 +42,76 @@
         const rows = data.split('\n').map(row => row.trim()).filter(row => row.length > 0);
         
         if (rows.length <= 1) {
-          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga avvikelser eller externa bokningar just nu.</p>';
+          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga kommande händelser inlagda.</p>';
           return;
         }
 
+        // Hämta dagens datum och sök första dagen i innevarande månad
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
         let html = '<table class="event-list"><tbody>';
+        let currentMonthKey = '';
+        let eventsShown = 0;
 
         for (let i = 1; i < rows.length; i++) {
           const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
           
-          const datum = cols[0] || '';
+          const rawDatum = cols[0] || '';
           const aktivitet = cols[1] || '';
           const tid = cols[2] || '';
           const hall = cols[3] || '';
-          const paverkan = cols[4] || ''; // T.ex. "Inställd träning" eller "Begränsad yta"
+          const paverkan = cols[4] || '';
+
+          if (!rawDatum) continue;
+
+          // Försök tolka datumet
+          const eventDate = new Date(rawDatum.split(' ')[0]); // Tar första datumet om det är ett spann
+
+          // Om datumet går att tolka och tillhör en tidigare månad -> Hoppa över (dölj)
+          if (!isNaN(eventDate.getTime())) {
+            const eventMonthStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1);
+            if (eventMonthStart < currentMonthStart) {
+              continue; // Döljer passerade månader
+            }
+          }
+
+          eventsShown++;
+
+          // Formatera månad, dag och veckodag på svenska
+          let monthName = '';
+          let dayNumber = rawDatum;
+          let dayName = '';
+
+          if (!isNaN(eventDate.getTime())) {
+            monthName = eventDate.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+            dayNumber = eventDate.getDate();
+            dayName = eventDate.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '');
+          }
+
+          // Om vi har kommit till en ny månad -> Skapa en Månadsrubrik
+          if (monthName && monthName !== currentMonthKey) {
+            currentMonthKey = monthName;
+            html += `
+              <tr class="month-header">
+                <td colspan="2">${monthName}</td>
+              </tr>
+            `;
+          }
 
           html += `
             <tr class="event-row">
-              <td class="date-cell"><strong>${datum}</strong></td>
+              <td class="date-cell">
+                <div class="day-number">${dayNumber}</div>
+                <div class="day-name">${dayName}</div>
+              </td>
               <td class="info-cell">
                 <span class="title">${aktivitet}</span><br>
-                ${tid ? `<span><strong>Tid:</strong> ${tid}</span> | ` : ''}
-                ${hall ? `<span class="hall">${hall}</span>` : ''}<br>
+                <div class="details">
+                  ${tid ? `<span><strong>Tid:</strong> ${tid}</span>` : ''}
+                  ${tid && hall ? ' | ' : ''}
+                  ${hall ? `<span class="hall">${hall}</span>` : ''}
+                </div>
                 ${paverkan ? `<span class="impact">⚠️ ${paverkan}</span>` : ''}
               </td>
             </tr>
@@ -59,7 +119,12 @@
         }
 
         html += '</tbody></table>';
-        document.getElementById('events-container').innerHTML = html;
+
+        if (eventsShown === 0) {
+          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga aktiva eller kommande händelser just nu.</p>';
+        } else {
+          document.getElementById('events-container').innerHTML = html;
+        }
 
       } catch (error) {
         document.getElementById('events-container').innerHTML = '<p>Kunde inte ladda listan just nu.</p>';
@@ -70,3 +135,4 @@
   </script>
 </body>
 </html>
+
