@@ -46,7 +46,6 @@
           return;
         }
 
-        // Hämta dagens datum och sök första dagen i innevarande månad
         const now = new Date();
         const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -63,17 +62,26 @@
           const hall = cols[3] || '';
           const paverkan = cols[4] || '';
 
-          if (!rawDatum) continue;
+          if (!rawDatum && !aktivitet) continue;
 
-          // Plocka ut det första datumet för att kunna sortera på månad och dölja gamla händelser
-          const firstDatePart = rawDatum.split(/[-–]/)[0].trim();
-          const eventDate = new Date(firstDatePart);
+          // Hämta ut första datumdelen vid bindestreck/intervall
+          const firstDateStr = rawDatum.split(/[-–]/)[0].trim();
+          
+          // Omvandla YYYY-MM-DD säkert
+          let eventDate = null;
+          const dateParts = firstDateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (dateParts) {
+            eventDate = new Date(parseInt(dateParts[1]), parseInt(dateParts[2]) - 1, parseInt(dateParts[3]));
+          } else {
+            const parsed = new Date(firstDateStr);
+            if (!isNaN(parsed.getTime())) eventDate = parsed;
+          }
 
-          // Om datumet går att tolka och tillhör en tidigare månad -> Hoppa över (dölj)
-          if (!isNaN(eventDate.getTime())) {
+          // Dölj endast om datumet GÅR att tolka OCH inträffade FÖRE denna månad
+          if (eventDate) {
             const eventMonthStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1);
             if (eventMonthStart < currentMonthStart) {
-              continue; // Döljer passerade månader
+              continue;
             }
           }
 
@@ -83,10 +91,9 @@
           let dayDisplay = rawDatum;
           let dayName = '';
 
-          if (!isNaN(eventDate.getTime())) {
+          if (eventDate) {
             monthName = eventDate.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
             
-            // Om det är ett intervall (innehåller - eller –), visa hela texten förenklad i datumrutan
             if (rawDatum.includes('-') || rawDatum.includes('–')) {
               dayDisplay = rawDatum.replace(/\d{4}-\d{2}-/g, '').trim();
               dayName = 'Multi-dag';
@@ -96,7 +103,7 @@
             }
           }
 
-          // Om vi har kommit till en ny månad -> Skapa en Månadsrubrik
+          // Månadsrubrik
           if (monthName && monthName !== currentMonthKey) {
             currentMonthKey = monthName;
             html += `
@@ -113,7 +120,7 @@
                 ${dayName ? `<div class="day-name">${dayName}</div>` : ''}
               </td>
               <td class="info-cell">
-                <span class="title">${aktivitet}</span><br>
+                ${aktivitet ? `<span class="title">${aktivitet}</span><br>` : ''}
                 ${tid ? `<div class="details"><strong>Tid:</strong> ${tid}</div>` : ''}
                 ${hall ? `<div class="hall-row">Hall: ${hall}</div>` : ''}
                 ${paverkan ? `<span class="impact">⚠️ ${paverkan}</span>` : ''}
@@ -139,3 +146,4 @@
   </script>
 </body>
 </html>
+
