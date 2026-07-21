@@ -15,6 +15,162 @@
     .event-row { border-bottom: 1px solid #e0e0e0; }
     
     /* Datumkolumnen */
+    .date-cell { padding: 12px 8px; width: 110px; vertical-align: top; background-color: #f9f9f9; text-align: center; border-right: 2px solid #ddd; }
+    .day-number { font-size: 15px; font-weight: bold; color: #111; line-height: 1.2; word-break: break-word; }
+    .day-name { font-size: 11px; color: #666; text-transform: uppercase; margin-top: 4px; font-weight: bold; }
+    
+    /* Informationskolumnen */
+    .info-cell { padding: 12px 12px; vertical-align: top; line-height: 1.4; }
+    .title { font-size: 15px; color: #111; font-weight: bold; margin-bottom: 3px; display: inline-block; }
+    .details { color: #444; font-size: 12px; margin-top: 2px; }
+    .hall-row { color: #d32f2f; font-weight: bold; font-size: 12px; margin-top: 2px; }
+    .impact { background-color: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; display: inline-block; margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+  <div id="events-container">Laddar händelser...</div>
+
+  <script>
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTOQelFLsbE3f76MT1VwYeuEJzGwK0J1dyY2WgEmjPhWytLugTLq0UENWUUFO5LXP0B0TQiYBEprODm/pub?gid=0&single=true&output=csv';
+
+    async function loadEvents() {
+      try {
+        const response = await fetch(csvUrl);
+        const data = await response.text();
+        
+        const rows = data.split('\n').map(row => row.trim()).filter(row => row.length > 0);
+        
+        if (rows.length <= 1) {
+          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga kommande händelser inlagda.</p>';
+          return;
+        }
+
+        // Hämta dagens datum och sök första dagen i innevarande månad
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        let html = '<table class="event-list"><tbody>';
+        let currentMonthKey = '';
+        let eventsShown = 0;
+
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
+          
+          const rawDatum = cols[0] || '';
+          const aktivitet = cols[1] || '';
+          const tid = cols[2] || '';
+          const hall = cols[3] || '';
+          const paverkan = cols[4] || '';
+
+          if (!rawDatum) continue;
+
+          // Plocka ut det första datumet för att kunna sortera på månad och dölja gamla händelser
+          const firstDatePart = rawDatum.split(/[-–]/)[0].trim();
+          const eventDate = new Date(firstDatePart);
+
+          // Om datumet går att tolka och tillhör en tidigare månad -> Hoppa över (dölj)
+          if (!isNaN(eventDate.getTime())) {
+            const eventMonthStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1);
+            if (eventMonthStart < currentMonthStart) {
+              continue; // Döljer passerade månader
+            }
+          }
+
+          eventsShown++;
+
+          let monthName = '';
+          let dayDisplay = rawDatum;
+          let dayName = '';
+
+          if (!isNaN(eventDate.getTime())) {
+            monthName = eventDate.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+            
+            // Om det är ett intervall (innehåller - eller –), visa hela texten förenklad i datumrutan
+            if (rawDatum.includes('-') || rawDatum.includes('–')) {
+              dayDisplay = rawDatum.replace(/\d{4}-\d{2}-/g, '').trim();
+              dayName = 'Multi-dag';
+            } else {
+              dayDisplay = eventDate.getDate();
+              dayName = eventDate.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '');
+            }
+          }
+
+          // Om vi har kommit till en ny månad -> Skapa en Månadsrubrik
+          if (monthName && monthName !== currentMonthKey) {
+            currentMonthKey = monthName;
+            html += `
+              <tr class="month-header">
+                <td colspan="2">${monthName}</td>
+              </tr>
+            `;
+          }
+
+          html += `
+            <tr class="event-row">
+              <td class="date-cell">
+                <div class="day-number">${dayDisplay}</div>
+                ${dayName ? `<div class="day-name">${dayName}</div>` : ''}
+              </td>
+              <td class="info-cell">
+                <span class="title">${aktivitet}</span><br>
+                ${tid ? `<div class="details"><strong>Tid:</strong> ${tid}</div>` : ''}
+                ${hall ? `<div class="hall-row">Hall: ${hall}</div>` : ''}
+                ${paverkan ? `<span class="impact">⚠️ ${paverkan}</span>` : ''}
+              </td>
+            </tr>
+          `;
+        }
+
+        html += '</tbody></table>';
+
+        if (eventsShown === 0) {
+          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga aktiva eller kommande händelser just nu.</p>';
+        } else {
+          document.getElementById('events-container').innerHTML = html;
+        }
+
+      } catch (error) {
+        document.getElementById('events-container').innerHTML = '<p>Kunde inte ladda listan just nu.</p>';
+      }
+    }
+
+    loadEvents();
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #fff; }
+    .event-list { width: 100%; border-collapse: collapse; font-size: 13px; }
+    
+    /* Månadsrubrik */
+    .month-header { background-color: #333; color: #fff; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    .month-header td { padding: 8px 10px; }
+
+    /* Händelserader */
+    .event-row { border-bottom: 1px solid #e0e0e0; }
+    
+    /* Datumkolumnen */
     .date-cell { padding: 12px 8px; width: 80px; vertical-align: top; background-color: #f9f9f9; text-align: center; border-right: 2px solid #ddd; }
     .day-number { font-size: 18px; font-weight: bold; color: #111; line-height: 1; }
     .day-name { font-size: 11px; color: #666; text-transform: uppercase; margin-top: 4px; font-weight: bold; }
