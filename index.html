@@ -85,18 +85,24 @@
               const startDay = startDate.getDate();
               const endDay = endDate.getDate();
 
+              // Hämta kortnamn för start- och slutveckodag (t.ex. "mån", "fre")
+              const startDayName = startDate.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '');
+              const endDayName = endDate.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '');
+
               const isDifferentMonth = startDate.getMonth() !== endDate.getMonth() || startDate.getFullYear() !== endDate.getFullYear();
 
               if (isDifferentMonth) {
                 // Över månads- eller årsskifte
                 const startMonthShort = startDate.toLocaleDateString('sv-SE', { month: 'short' }).replace('.', '');
                 const endMonthShort = endDate.toLocaleDateString('sv-SE', { month: 'short' }).replace('.', '');
+      
                 dayDisplay = `${startDay} ${startMonthShort} – ${endDay} ${endMonthShort}`;
+                dayName = `${startDayName} – ${endDayName}`; // Visar t.ex. "ons – sön"
               } else {
                 // Samma månad
                 dayDisplay = `${startDay} – ${endDay}`;
+                dayName = `${startDayName}–${endDayName}`; // Visar t.ex. "mån–fre"
               }
-              dayName = 'Multi-dag';
             } else {
               dayDisplay = rawDatum;
             }
@@ -110,7 +116,7 @@
               dayDisplay = rawDatum;
             }
           }
-
+          
           // Dölj endast om händelsen (eller startdatumet) inträffade FÖRE innevarande månad
           if (eventDate && !isNaN(eventDate.getTime())) {
             const eventMonthStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1);
