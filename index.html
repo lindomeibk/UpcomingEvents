@@ -15,15 +15,15 @@
     .event-row { border-bottom: 1px solid #e0e0e0; }
     
     /* Datumkolumnen */
-    .date-cell { padding: 12px 8px; width: 80px; vertical-align: top; background-color: #f9f9f9; text-align: center; border-right: 2px solid #ddd; }
-    .day-number { font-size: 18px; font-weight: bold; color: #111; line-height: 1; }
-    .day-name { font-size: 11px; color: #666; text-transform: uppercase; margin-top: 4px; font-weight: bold; }
+    .date-cell { padding: 12px 8px; width: 110px; vertical-align: top; background-color: #f9f9f9; text-align: center; border-right: 2px solid #ddd; }
+    .day-number { font-size: 15px; font-weight: bold; color: #111; line-height: 1.2; word-break: break-word; }
+    .day-name { font-size: 10px; color: #666; text-transform: uppercase; margin-top: 4px; font-weight: bold; }
     
     /* Informationskolumnen */
     .info-cell { padding: 12px 12px; vertical-align: top; line-height: 1.4; }
     .title { font-size: 15px; color: #111; font-weight: bold; margin-bottom: 3px; display: inline-block; }
     .details { color: #444; font-size: 12px; margin-top: 2px; }
-    .hall { color: #d32f2f; font-weight: bold; }
+    .hall-row { color: #d32f2f; font-weight: bold; font-size: 12px; margin-top: 2px; }
     .impact { background-color: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; display: inline-block; margin-top: 5px; }
   </style>
 </head>
@@ -37,16 +37,18 @@
     async function loadEvents() {
       try {
         const response = await fetch(csvUrl);
-        const data = await response.text();
+        if (!response.ok) {
+          throw new Error('Kunde inte läsa kalkylbladet (Status: ' + response.status + ')');
+        }
         
+        const data = await response.text();
         const rows = data.split('\n').map(row => row.trim()).filter(row => row.length > 0);
         
         if (rows.length <= 1) {
-          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga kommande händelser inlagda.</p>';
+          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga händelser inlagda i kalkylbladet.</p>';
           return;
         }
 
-        // Hämta dagens datum och sök första dagen i innevarande månad
         const now = new Date();
         const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -65,31 +67,66 @@
 
           if (!rawDatum) continue;
 
-          // Försök tolka datumet
-          const eventDate = new Date(rawDatum.split(' ')[0]); // Tar första datumet om det är ett spann
+          let dayDisplay = '';
+          let dayName = '';
+          let eventDate = null;
 
-          // Om datumet går att tolka och tillhör en tidigare månad -> Hoppa över (dölj)
-          if (!isNaN(eventDate.getTime())) {
+          // HUVUDLOGIK FÖR DATUM OCH INTERVALL (MED /)
+          if (rawDatum.includes('/')) {
+            const parts = rawDatum.split('/');
+            const startStr = parts[0].trim();
+            const endStr = parts[1].trim();
+
+            const startDate = new Date(startStr);
+            const endDate = new Date(endStr);
+            eventDate = startDate;
+
+            if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+              const startDay = startDate.getDate();
+              const endDay = endDate.getDate();
+
+              const isDifferentMonth = startDate.getMonth() !== endDate.getMonth() || startDate.getFullYear() !== endDate.getFullYear();
+
+              if (isDifferentMonth) {
+                // Över månads- eller årsskifte
+                const startMonthShort = startDate.toLocaleDateString('sv-SE', { month: 'short' }).replace('.', '');
+                const endMonthShort = endDate.toLocaleDateString('sv-SE', { month: 'short' }).replace('.', '');
+                dayDisplay = `${startDay} ${startMonthShort} – ${endDay} ${endMonthShort}`;
+              } else {
+                // Samma månad
+                dayDisplay = `${startDay} – ${endDay}`;
+              }
+              dayName = 'Multi-dag';
+            } else {
+              dayDisplay = rawDatum;
+            }
+          } else {
+            // Enkelt datum (YYYY-MM-DD)
+            eventDate = new Date(rawDatum);
+            if (!isNaN(eventDate.getTime())) {
+              dayDisplay = eventDate.getDate();
+              dayName = eventDate.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '');
+            } else {
+              dayDisplay = rawDatum;
+            }
+          }
+
+          // Dölj endast om händelsen (eller startdatumet) inträffade FÖRE innevarande månad
+          if (eventDate && !isNaN(eventDate.getTime())) {
             const eventMonthStart = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1);
             if (eventMonthStart < currentMonthStart) {
-              continue; // Döljer passerade månader
+              continue;
             }
           }
 
           eventsShown++;
 
-          // Formatera månad, dag och veckodag på svenska
+          // Månadsrubrik
           let monthName = '';
-          let dayNumber = rawDatum;
-          let dayName = '';
-
-          if (!isNaN(eventDate.getTime())) {
+          if (eventDate && !isNaN(eventDate.getTime())) {
             monthName = eventDate.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
-            dayNumber = eventDate.getDate();
-            dayName = eventDate.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '');
           }
 
-          // Om vi har kommit till en ny månad -> Skapa en Månadsrubrik
           if (monthName && monthName !== currentMonthKey) {
             currentMonthKey = monthName;
             html += `
@@ -102,16 +139,13 @@
           html += `
             <tr class="event-row">
               <td class="date-cell">
-                <div class="day-number">${dayNumber}</div>
-                <div class="day-name">${dayName}</div>
+                <div class="day-number">${dayDisplay}</div>
+                ${dayName ? `<div class="day-name">${dayName}</div>` : ''}
               </td>
               <td class="info-cell">
-                <span class="title">${aktivitet}</span><br>
-                <div class="details">
-                  ${tid ? `<span><strong>Tid:</strong> ${tid}</span>` : ''}
-                  ${tid && hall ? ' | ' : ''}
-                  ${hall ? `<span class="hall">${hall}</span>` : ''}
-                </div>
+                ${aktivitet ? `<span class="title">${aktivitet}</span><br>` : ''}
+                ${tid ? `<div class="details"><strong>Tid:</strong> ${tid}</div>` : ''}
+                ${hall ? `<div class="hall-row">Hall: ${hall}</div>` : ''}
                 ${paverkan ? `<span class="impact">⚠️ ${paverkan}</span>` : ''}
               </td>
             </tr>
@@ -121,13 +155,13 @@
         html += '</tbody></table>';
 
         if (eventsShown === 0) {
-          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga aktiva eller kommande händelser just nu.</p>';
+          document.getElementById('events-container').innerHTML = '<p style="color:#666;font-style:italic;">Inga kommande händelser inlagda.</p>';
         } else {
           document.getElementById('events-container').innerHTML = html;
         }
 
       } catch (error) {
-        document.getElementById('events-container').innerHTML = '<p>Kunde inte ladda listan just nu.</p>';
+        document.getElementById('events-container').innerHTML = '<p style="color:red;font-weight:bold;">Kunde inte ladda händelser: ' + error.message + '</p>';
       }
     }
 
